@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Checkpoint</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=4" />
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <div>
+        <p class="brand">AI Checkpoint</p>
+        <h1 id="pageTitle">Línea de meta</h1>
+      </div>
+      <div id="device" class="device" aria-live="polite">Cargando dispositivo…</div>
+    </header>
+
+    <nav class="mode-tabs" role="tablist">
+      <button type="button" class="tab active" data-mode="ops" id="tabOps">Operación</button>
+      <button type="button" class="tab" data-mode="train" id="tabTrain">Entrenamiento</button>
+      <button type="button" class="tab" data-mode="bibs" id="tabBibs">Dorsales</button>
+    </nav>
+
+    <!-- OPERACIÓN -->
+    <main class="layout" id="modeOps">
+      <section class="panel">
+        <h2>1. Video</h2>
+        <div class="video-load-wrap">
+          <label class="drop" id="drop" for="file">
+            <input type="file" id="file" accept="video/*,.mp4,.mkv,.mov,.webm,video/mp4" hidden />
+            <span id="dropLabel">Soltá un video o hacé clic para elegir</span>
+            <small>AV1/VP9 se convierten a H.264 (puede tardar unos minutos)</small>
+          </label>
+          <div id="videoLoadSpinner" class="video-load-spinner hidden" aria-live="polite">
+            <div class="spinner" aria-hidden="true"></div>
+            <p id="videoLoadMsg">Cargando video…</p>
+          </div>
+        </div>
+        <div class="row">
+          <label class="field grow">
+            <span>Videos disponibles</span>
+            <select id="videoSelect"><option value="">— elegir —</option></select>
+          </label>
+          <button type="button" class="btn ghost" id="refreshVideos">Actualizar</button>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>Tiempo del frame (s)</span>
+            <input type="number" id="frameTime" min="0" step="0.5" value="0" />
+          </label>
+          <button type="button" class="btn" id="loadFrame" disabled>Cargar frame</button>
+        </div>
+        <p id="videoMeta" class="meta"></p>
+      </section>
+
+      <section class="panel stage-panel" id="opsCalibPanel">
+        <h2>2. Calibrar</h2>
+        <div class="row">
+          <button type="button" class="tab calib-tab active" id="calibModeLine" data-calib="line">
+            Línea de meta
+          </button>
+          <button type="button" class="tab calib-tab" id="calibModeZone" data-calib="zone">
+            Área de detección
+          </button>
+        </div>
+        <p class="hint" id="calibHint">
+          Hacé clic en dos puntos para definir la línea de meta.
+        </p>
+        <div class="stage-wrap">
+          <canvas id="stage" width="960" height="540"></canvas>
+          <div class="stage-empty" id="stageEmpty">Sin frame cargado</div>
+        </div>
+        <div class="row">
+          <code id="lineOut" class="line-out">Línea: —</code>
+          <code id="zoneOut" class="line-out">Área: —</code>
+        </div>
+        <div class="row">
+          <button type="button" class="btn ghost" id="resetLine" disabled>Reset línea</button>
+          <button type="button" class="btn ghost" id="defaultLine" disabled>Línea 55%</button>
+          <button type="button" class="btn ghost" id="resetZone" disabled>Reset área</button>
+          <button type="button" class="btn ghost" id="defaultZone" disabled>Área completa</button>
+        </div>
+      </section>
+
+      <section class="panel stage-panel hidden" id="opsLivePanel">
+        <h2>2. Análisis en vivo</h2>
+        <p id="jobStatus" class="job-status"></p>
+        <p id="pendingBox" class="hint hidden"></p>
+        <div class="live-wrap">
+          <img id="liveFrame" alt="Frame en análisis" class="live-frame hidden" />
+          <p id="liveEmpty" class="hint">La vista previa aparece al iniciar el análisis.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="eventsTable">
+            <thead>
+              <tr>
+                <th>Track</th><th>Dorsal</th><th>Conf. votos</th><th>Votos</th><th>Tiempo (s)</th><th>OCR</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h3 class="subhead">Capturas de cruce</h3>
+        <div id="snapGallery" class="snap-gallery"></div>
+        <div class="row" id="jobLinks"></div>
+        <div class="row actions hidden" id="reviewOffer">
+          <button type="button" class="btn primary" id="startReview">Revisar detecciones</button>
+          <button type="button" class="btn ghost" id="skipReview">Ahora no</button>
+        </div>
+      </section>
+
+      <section class="panel stage-panel hidden" id="opsReviewPanel">
+        <h2>3. Revisar detecciones</h2>
+        <p id="opsReviewMeta" class="hint">Confirmá si cada cruce es correcto y corregí el dorsal si hace falta.</p>
+        <div class="review-grid review-grid-single">
+          <div class="review-card">
+            <p class="subhead">Captura</p>
+            <div class="review-img-frame">
+              <img id="opsReviewSnap" class="review-img" alt="Cruce" />
+            </div>
+          </div>
+          <div class="review-card">
+            <p class="subhead">Recorte dorsal</p>
+            <div class="review-img-frame">
+              <img id="opsReviewCrop" class="review-img" alt="Dorsal" />
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <label class="field grow">
+            <span>Número de dorsal</span>
+            <input type="text" id="opsReviewBib" placeholder="ej. 161" inputmode="numeric" />
+          </label>
+        </div>
+        <div class="row actions review-actions">
+          <button type="button" class="btn ghost" id="opsReviewPrev" disabled>Anterior</button>
+          <button type="button" class="btn primary" id="opsReviewOk">Correcto</button>
+          <button type="button" class="btn danger" id="opsReviewBad">Incorrecto</button>
+          <button type="button" class="btn ghost" id="opsReviewSkip">Saltar</button>
+        </div>
+        <p id="opsReviewStatus" class="meta"></p>
+      </section>
+
+      <section class="panel">
+        <h2 id="opsProcessTitle">3. Procesar</h2>
+        <div class="row">
+          <label class="field grow">
+            <span>Modelo detector de dorsal</span>
+            <select id="opsDetectModel">
+              <option value="">HSV / sin modelo entrenado</option>
+            </select>
+          </label>
+          <label class="field grow">
+            <span>Modelo reconocimiento (números)</span>
+            <select id="opsRecognizeModel">
+              <option value="">EasyOCR genérico</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>Confianza YOLO</span>
+            <input type="number" id="conf" min="0.05" max="0.95" step="0.05" value="0.35" />
+          </label>
+          <label class="field">
+            <span>Máx. frames (opcional)</span>
+            <input type="number" id="maxFrames" min="1" step="1" placeholder="todo" />
+          </label>
+          <label class="check"><input type="checkbox" id="cpu" /> Forzar CPU</label>
+          <label class="check"><input type="checkbox" id="ocr" checked /> Leer dorsal (OCR)</label>
+        </div>
+        <div class="row actions">
+          <button type="button" class="btn primary" id="run" disabled>Detectar cruces</button>
+          <button type="button" class="btn danger" id="stop" disabled>Detener</button>
+          <button type="button" class="btn ghost hidden" id="backToCalib">Volver a calibrar</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- ENTRENAMIENTO -->
+    <main class="layout train-layout hidden" id="modeTrain">
+      <section class="panel">
+        <h2>Modo entrenamiento</h2>
+        <p class="hint">
+          Escaná el video y etiquetá cada propuesta de dorsal. Al terminar la revisión
+          podrás entrenar o refinar el modelo.
+        </p>
+        <div class="row">
+          <label class="field grow">
+            <span>Tipo de sesión</span>
+            <select id="trainKind">
+              <option value="detect">Detección de dorsal (¿es un dorsal?)</option>
+              <option value="recognize">Reconocimiento de dorsal (¿qué número es?)</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field grow">
+            <span>Video</span>
+            <select id="trainVideoSelect"><option value="">— elegir —</option></select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>Cada N frames</span>
+            <input type="number" id="trainStride" min="1" max="60" value="5" />
+          </label>
+          <label class="field">
+            <span>Máx. candidatos</span>
+            <input type="number" id="trainMaxCand" min="10" max="2000" value="200" />
+          </label>
+          <label class="field">
+            <span>Score mínimo</span>
+            <input type="number" id="trainMinScore" min="0.05" max="0.95" step="0.05" value="0.14" />
+          </label>
+          <label class="field">
+            <span>Máx. frames</span>
+            <input type="number" id="trainMaxFrames" min="1" placeholder="todo" />
+          </label>
+        </div>
+        <div class="row actions">
+          <button type="button" class="btn primary" id="trainStart" disabled>Escanear candidatos</button>
+          <button type="button" class="btn danger" id="trainStopScan" disabled>Detener escaneo</button>
+        </div>
+        <p id="trainScanStatus" class="meta"></p>
+      </section>
+
+      <section class="panel stage-panel review-panel">
+        <h2>Revisión</h2>
+        <p id="trainReviewMeta" class="hint">Sin sesión activa.</p>
+        <div class="review-viewport">
+          <div class="review-grid review-grid-single">
+            <div class="review-card">
+              <p class="subhead">Recorte de dorsal propuesto</p>
+              <div class="review-img-frame">
+                <img id="trainCrop" class="review-img" alt="Recorte propuesto" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <img id="trainContext" class="hidden" alt="" />
+        <div class="review-footer">
+          <div id="trainRecognizeBox" class="row hidden">
+            <label class="field grow">
+              <span>Número de dorsal</span>
+              <input type="text" id="trainBibInput" placeholder="ej. 132" inputmode="numeric" />
+            </label>
+          </div>
+          <div class="row actions review-actions" id="trainDetectActions">
+            <button type="button" class="btn ghost" id="trainPrev" disabled>Anterior</button>
+            <button type="button" class="btn primary" id="trainYes" disabled>Sí, es un dorsal</button>
+            <button type="button" class="btn danger" id="trainNo" disabled>No es un dorsal</button>
+            <button type="button" class="btn ghost" id="trainSkip" disabled>Saltar</button>
+          </div>
+          <div class="row actions review-actions hidden" id="trainRecognizeActions">
+            <button type="button" class="btn ghost" id="trainPrevRec" disabled>Anterior</button>
+            <button type="button" class="btn primary" id="trainSaveBib" disabled>Guardar número</button>
+            <button type="button" class="btn ghost" id="trainSkipRec" disabled>Saltar</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- DORSALES -->
+    <main class="layout bibs-layout hidden" id="modeBibs">
+      <section class="panel">
+        <h2>Generar dorsales</h2>
+        <p class="hint">
+          Dorsales con marcadores de esquina tipo QR para facilitar la detección.
+          El texto de carrera queda debajo, fuera del área del dorsal.
+        </p>
+        <div class="row">
+          <label class="field">
+            <span>Número (vista previa)</span>
+            <input type="text" id="bibPreviewNumber" value="161" inputmode="numeric" />
+          </label>
+          <label class="field">
+            <span>Desde</span>
+            <input type="number" id="bibStart" min="1" value="1" />
+          </label>
+          <label class="field">
+            <span>Hasta</span>
+            <input type="number" id="bibEnd" min="1" value="10" />
+          </label>
+          <label class="field">
+            <span>Ceros a la izquierda</span>
+            <input type="number" id="bibPad" min="0" max="8" value="0" />
+          </label>
+        </div>
+        <div class="row">
+          <label class="field grow">
+            <span>Texto de carrera (fuera del dorsal)</span>
+            <input type="text" id="bibRaceText" value="Maratón 2026" />
+          </label>
+        </div>
+        <div class="row color-row">
+          <label class="field color-field">
+            <span>Fondo dorsal</span>
+            <input type="color" id="bibBg" value="#ffffff" />
+          </label>
+          <label class="field color-field">
+            <span>Número</span>
+            <input type="color" id="bibNumberColor" value="#111111" />
+          </label>
+          <label class="field color-field">
+            <span>Marcadores</span>
+            <input type="color" id="bibMarkerColor" value="#111111" />
+          </label>
+          <label class="field color-field">
+            <span>Borde</span>
+            <input type="color" id="bibBorderColor" value="#111111" />
+          </label>
+          <label class="field color-field">
+            <span>Texto carrera</span>
+            <input type="color" id="bibRaceColor" value="#444444" />
+          </label>
+          <label class="field color-field">
+            <span>Fondo hoja</span>
+            <input type="color" id="bibPageBg" value="#f0f0f0" />
+          </label>
+        </div>
+        <div class="row actions">
+          <button type="button" class="btn" id="bibRefreshPreview">Actualizar vista</button>
+          <button type="button" class="btn primary" id="bibDownloadOne">Descargar PNG</button>
+          <button type="button" class="btn primary" id="bibDownloadRange">Descargar lote (ZIP)</button>
+        </div>
+        <p id="bibStatus" class="meta"></p>
+      </section>
+
+      <section class="panel stage-panel">
+        <h2>Vista previa</h2>
+        <div class="bib-preview-wrap">
+          <img id="bibPreviewImg" class="bib-preview-img" alt="Vista previa del dorsal" />
+          <div id="bibPreviewEmpty" class="stage-empty">Generá una vista previa</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: crear / refinar modelo antes de escanear -->
+  <div id="trainScanModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="trainScanModalTitle">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <h2 id="trainScanModalTitle">Antes de escanear</h2>
+      <p class="hint" id="trainScanModalHint">¿Querés refinar un modelo existente o crear uno nuevo?</p>
+
+      <div id="trainModalStepChoice" class="modal-step">
+        <div class="modal-choices">
+          <button type="button" class="choice-btn" id="trainModalChoiceRefine">
+            <strong>Refinar modelo</strong>
+            <span>Seguir entrenando con más datos de este video</span>
+          </button>
+          <button type="button" class="choice-btn" id="trainModalChoiceCreate">
+            <strong>Crear modelo nuevo</strong>
+            <span>Empezar un modelo desde cero con este video</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="trainModalStepRefine" class="modal-step hidden">
+        <label class="field grow">
+          <span>Modelo a refinar</span>
+          <select id="trainModalRefineSelect"></select>
+        </label>
+      </div>
+
+      <div id="trainModalStepCreate" class="modal-step hidden">
+        <label class="field grow">
+          <span>Nombre del nuevo modelo</span>
+          <input type="text" id="trainModalNewName" placeholder="ej. Modelo A" autocomplete="off" />
+        </label>
+      </div>
+
+      <div id="trainModalDetectPick" class="modal-step hidden">
+        <label class="field grow">
+          <span>Detector de dorsal (propuestas)</span>
+          <select id="trainModalDetectSelect">
+            <option value="">HSV (sin detector entrenado)</option>
+          </select>
+        </label>
+        <p class="hint" id="trainModalDetectHint">
+          Usá un modelo de detección listo para proponer solo recortes que parezcan dorsales.
+        </p>
+      </div>
+
+      <p id="trainModalError" class="meta modal-error"></p>
+      <div class="row actions modal-actions">
+        <button type="button" class="btn ghost" id="trainModalCancel">Cancelar</button>
+        <button type="button" class="btn" id="trainModalBack" disabled>Atrás</button>
+        <button type="button" class="btn primary" id="trainModalNext" disabled>Siguiente</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay: entrenamiento en curso tras etiquetar -->
+  <div id="trainFitOverlay" class="modal hidden" role="alertdialog" aria-live="polite">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card modal-card-sm">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 id="trainFitTitle">Entrenando modelo</h2>
+      <p id="trainFitMessage" class="hint">Preparando…</p>
+    </div>
+  </div>
+
+  <!-- Modal: confirmar entrenamiento al terminar revisión -->
+  <div id="trainFitConfirmModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" data-close-fit-confirm></div>
+    <div class="modal-card">
+      <h2>Revisión completa</h2>
+      <p class="hint" id="trainFitConfirmHint">
+        ¿Querés iniciar el entrenamiento o refinamiento del modelo con las etiquetas de esta sesión?
+      </p>
+      <div class="row actions modal-actions">
+        <button type="button" class="btn ghost" id="trainFitConfirmBack">Corregir anterior</button>
+        <button type="button" class="btn ghost" id="trainFitConfirmNo">Ahora no</button>
+        <button type="button" class="btn primary" id="trainFitConfirmYes">Entrenar modelo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>
